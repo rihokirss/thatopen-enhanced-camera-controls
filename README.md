@@ -10,6 +10,7 @@ Smooth, momentum-based camera controls for [That Open Components](https://docs.t
 ## ✨ Features
 
 - 🎯 **Smooth Wheel Zooming** - Momentum-based scrolling with velocity accumulation
+- 🚀 **Proximity-Based Speed** - Automatically adjusts speed based on distance to objects (slows near, speeds far)
 - 🔄 **Smart Orbit Point** - Automatically sets orbit center based on raycast
 - 📱 **Touch Support** - Full mobile device support out of the box
 - ⌨️ **Keyboard Modifiers** - Shift for speed boost, Ctrl/Alt for precision
@@ -74,15 +75,21 @@ See [TUTORIAL.md](./TUTORIAL.md) for detailed documentation, including:
 
 ```typescript
 createSmoothWheelControl(world, components, containerRef, {
-  velocityDecay: 0.9,           // Velocity reduction per scroll (0.9 = -10%)
-  velocityTimeout: 150,          // Reset velocity after pause (ms)
-  velocityDivisor: 200,          // Acceleration sensitivity
-  maxVelocityMultiplier: 5,      // Max zoom speed (5x base speed)
-  smoothing: 0.15,               // Animation responsiveness (0-1)
-  stepAccumulation: 0.3,         // Motion blending between scrolls
-  shiftBoost: 3,                 // Shift key multiplier
-  fineModifier: 0.1,             // Ctrl/Alt precision multiplier
-  fragmentUpdateDelay: 300       // Fragment update delay (ms)
+  velocityDecay: 0.9,              // Velocity reduction per scroll (0.9 = -10%)
+  velocityTimeout: 150,             // Reset velocity after pause (ms)
+  velocityDivisor: 200,             // Acceleration sensitivity
+  maxVelocityMultiplier: 5,         // Max zoom speed (5x base speed)
+  smoothing: 0.15,                  // Animation responsiveness (0-1)
+  stepAccumulation: 0.3,            // Motion blending between scrolls
+  shiftBoost: 3,                    // Shift key multiplier
+  fineModifier: 0.1,                // Ctrl/Alt precision multiplier
+  fragmentUpdateDelay: 300,         // Fragment update delay (ms)
+  proximitySlowdown: true,          // Enable distance-based speed adjustment
+  proximitySlowDistance: 2.0,       // Distance (units) where speed is minimum
+  proximityNormalDistance: 10.0,    // Distance where speed is normal (1x)
+  proximityFastDistance: 20.0,      // Distance where speed reaches maximum
+  proximityMinSpeed: 0.1,           // Min speed multiplier when close (10%)
+  proximityMaxSpeed: 4.0            // Max speed multiplier when far (400%)
 })
 ```
 
@@ -100,6 +107,7 @@ createSmoothWheelControl(world, components, containerRef, {
 
 ### `smoothWheelControl.ts`
 - Momentum-based wheel zooming with velocity accumulation
+- Proximity-based automatic speed adjustment (slows near objects, speeds up when far)
 - Configurable decay, smoothing, and acceleration
 - Fragment update optimization
 - Scene-based zoom calibration

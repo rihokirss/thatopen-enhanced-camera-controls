@@ -18,7 +18,7 @@ In this tutorial, you'll learn how to:
 
 First, let's understand what these controls do:
 
-**Smooth Wheel Control** provides momentum-based zooming that feels natural and responsive. Instead of fixed zoom steps, it accumulates scroll velocity and applies smooth deceleration.
+**Smooth Wheel Control** provides momentum-based zooming that feels natural and responsive. Instead of fixed zoom steps, it accumulates scroll velocity and applies smooth deceleration. It also features **proximity-based speed adjustment** - automatically slowing down when near objects and speeding up when navigating open space.
 
 **Mouse Orbit Control** automatically sets the orbit point based on where you start dragging. This means rotating around the part of the model you're actually looking at, not some arbitrary center point.
 
@@ -146,15 +146,23 @@ const smoothWheel = createSmoothWheelControl(
   components,
   containerRef,
   {
-    velocityDecay: 0.9,           // How quickly scrolling slows down (0-1)
-    velocityTimeout: 150,          // Reset velocity after this pause (ms)
-    velocityDivisor: 200,          // Controls acceleration sensitivity
-    maxVelocityMultiplier: 5,      // Maximum zoom speed multiplier
-    smoothing: 0.15,               // Animation smoothness (0-1)
-    stepAccumulation: 0.3,         // How much previous motion carries over
-    shiftBoost: 3,                 // Shift key speed multiplier
-    fineModifier: 0.1,             // Ctrl/Alt precision modifier
-    fragmentUpdateDelay: 300       // Delay before updating fragments (ms)
+    velocityDecay: 0.9,              // How quickly scrolling slows down (0-1)
+    velocityTimeout: 150,             // Reset velocity after this pause (ms)
+    velocityDivisor: 200,             // Controls acceleration sensitivity
+    maxVelocityMultiplier: 5,         // Maximum zoom speed multiplier
+    smoothing: 0.15,                  // Animation smoothness (0-1)
+    stepAccumulation: 0.3,            // How much previous motion carries over
+    shiftBoost: 3,                    // Shift key speed multiplier
+    fineModifier: 0.1,                // Ctrl/Alt precision modifier
+    fragmentUpdateDelay: 300,         // Delay before updating fragments (ms)
+    
+    // Proximity-based speed adjustment (NEW!)
+    proximitySlowdown: true,          // Enable distance-based speed scaling
+    proximitySlowDistance: 2.0,       // Distance where speed is minimum
+    proximityNormalDistance: 10.0,    // Distance where speed is normal (1x)
+    proximityFastDistance: 20.0,      // Distance where speed is maximum
+    proximityMinSpeed: 0.1,           // Minimum speed when close (10%)
+    proximityMaxSpeed: 4.0            // Maximum speed when far (400%)
   }
 )
 ```
@@ -164,6 +172,14 @@ const smoothWheel = createSmoothWheelControl(
 - **velocityDivisor**: Lower = faster acceleration, higher = slower
 - **smoothing**: Higher = more responsive, lower = smoother
 - **stepAccumulation**: Controls motion blending between scroll events
+
+**Proximity parameters:**
+- **proximitySlowdown**: Enable/disable automatic speed adjustment based on distance to objects
+- **proximitySlowDistance**: When closer than this, speed scales down (0.1x - 1.0x)
+- **proximityNormalDistance**: Between slow and normal distance, speed is 1.0x
+- **proximityFastDistance**: Between normal and fast distance, speed scales up (1.0x - 4.0x)
+- **proximityMinSpeed**: Minimum speed multiplier when very close to objects
+- **proximityMaxSpeed**: Maximum speed multiplier when far from objects
 
 ### Keyboard modifiers
 

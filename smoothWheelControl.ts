@@ -2,7 +2,7 @@ import * as OBC from '@thatopen/components'
 import * as THREE from 'three'
 
 // Base dolly step size - auto-calibrated by calibrateDollyStepByScene()
-export const DOLLY_STEP_REF = { value: 0.2 }
+export const DOLLY_STEP_REF = { value: 0.5 }
 
 export interface SmoothWheelControlConfig {
   velocityDecay?: number
@@ -14,6 +14,12 @@ export interface SmoothWheelControlConfig {
   shiftBoost?: number
   fineModifier?: number
   fragmentUpdateDelay?: number
+  proximitySlowdown?: boolean
+  proximitySlowDistance?: number
+  proximityNormalDistance?: number
+  proximityFastDistance?: number
+  proximityMinSpeed?: number
+  proximityMaxSpeed?: number
 }
 
 const defaultConfig: Required<SmoothWheelControlConfig> = {
@@ -26,6 +32,12 @@ const defaultConfig: Required<SmoothWheelControlConfig> = {
   shiftBoost: 3, // Shift key multiplies step size (3x faster)
   fineModifier: 0.1, // Ctrl/Alt/Meta multiplies step size (0.1 = 10x slower)
   fragmentUpdateDelay: 300, // Delay (ms) before updating fragments after movement stops
+  proximitySlowdown: true, // Automatic speed adjustment based on object distance
+  proximitySlowDistance: 2.0, // Distance where speed is at minimum
+  proximityNormalDistance: 10.0, // Distance where speed is normal (1x)
+  proximityFastDistance: 20.0, // Distance where speed reaches maximum
+  proximityMinSpeed: 0.1, // Minimum speed when close (0.1 = 10%)
+  proximityMaxSpeed: 4.0, // Maximum speed when far (4.0 = 400%)
 }
 
 export function createSmoothWheelControl(
@@ -45,7 +57,7 @@ export function createSmoothWheelControl(
   let lastMouseY = 0
 
   // Animation loop: smoothly moves camera along raycast direction
-  const animate = () => {
+  const animate = async () => {
     const cc = world.camera.controls
     if (!cc || !containerRef.current || Math.abs(targetStep) < 0.001) {
       targetStep = 0
@@ -54,7 +66,7 @@ export function createSmoothWheelControl(
     }
 
     // Calculate smooth step (fraction of remaining distance)
-    const currentStep = targetStep * cfg.smoothing
+    let currentStep = targetStep * cfg.smoothing
     targetStep -= currentStep
 
     // Get current camera position and target
@@ -71,6 +83,45 @@ export function createSmoothWheelControl(
     const raycaster = new THREE.Raycaster()
     raycaster.setFromCamera(mouse, world.camera.three)
     const dir = raycaster.ray.direction.clone().normalize()
+
+    // Proximity-based speed adjustment
+    if (cfg.proximitySlowdown && currentStep !== 0) {
+      try {
+        const caster = components.get(OBC.Raycasters).get(world)
+        const result = await caster.castRay()
+        
+        if (result && 'distance' in result && typeof result.distance === 'number') {
+          const distance = result.distance
+          let speedFactor = 1.0
+          
+          if (distance < cfg.proximitySlowDistance) {
+            // Close to object: slow down (0.1x - 1.0x)
+            speedFactor = THREE.MathUtils.lerp(
+              cfg.proximityMinSpeed,
+              1.0,
+              distance / cfg.proximitySlowDistance
+            )
+          } else if (distance < cfg.proximityNormalDistance) {
+            // Normal range: maintain normal speed (1.0x)
+            speedFactor = 1.0
+          } else if (distance < cfg.proximityFastDistance) {
+            // Far from object: speed up (1.0x - 4.0x)
+            speedFactor = THREE.MathUtils.lerp(
+              1.0,
+              cfg.proximityMaxSpeed,
+              (distance - cfg.proximityNormalDistance) / (cfg.proximityFastDistance - cfg.proximityNormalDistance)
+            )
+          } else {
+            // Very far: maximum speed (4.0x)
+            speedFactor = cfg.proximityMaxSpeed
+          }
+          
+          currentStep *= speedFactor
+        }
+      } catch (error) {
+        // Silently fail if raycast fails
+      }
+    }
 
     // Move both camera position and target along the ray direction
     pos.addScaledVector(dir, currentStep)
