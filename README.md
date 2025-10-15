@@ -5,7 +5,6 @@ Smooth, momentum-based camera controls for [That Open Components](https://docs.t
 ## 🔧 Problems it solves
 
 - ❌ **Dolly slowdown** - Default camera controls become sluggish when zooming close to objects
-- ❌ **Jerky wheel zoom** - Fixed zoom steps feel unnatural
 - ❌ **Wrong orbit center** - Rotating around arbitrary points instead of what you're looking at
 - ❌ **No touch support** - Desktop-only controls
 
