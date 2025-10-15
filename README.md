@@ -2,6 +2,13 @@
 
 Smooth, momentum-based camera controls for [That Open Components](https://docs.thatopen.com/) viewers.
 
+## 🔧 Problems it solves
+
+- ❌ **Dolly slowdown** - Default camera controls become sluggish when zooming close to objects
+- ❌ **Jerky wheel zoom** - Fixed zoom steps feel unnatural
+- ❌ **Wrong orbit center** - Rotating around arbitrary points instead of what you're looking at
+- ❌ **No touch support** - Desktop-only controls
+
 ## ✨ Features
 
 - 🎯 **Smooth Wheel Zooming** - Momentum-based scrolling with velocity accumulation
@@ -9,7 +16,7 @@ Smooth, momentum-based camera controls for [That Open Components](https://docs.t
 - 📱 **Touch Support** - Full mobile device support out of the box
 - ⌨️ **Keyboard Modifiers** - Shift for speed boost, Ctrl/Alt for precision
 - ⚙️ **Highly Configurable** - Tune all parameters to your needs
-- 🎨 **Auto Scene Calibration** - Adjusts zoom speed based on model size
+- 🎨 **Auto Scene Calibration** - Fixes dolly slowdown by adjusting zoom speed based on model size
 
 ## 📦 Installation
 
