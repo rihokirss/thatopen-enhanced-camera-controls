@@ -1,0 +1,37 @@
+{
+  "name": "thatopen-enhanced-camera-controls",
+  "version": "1.0.0",
+  "description": "Smooth, momentum-based camera controls for That Open Components viewers",
+  "main": "index.js",
+  "type": "module",
+  "keywords": [
+    "thatopen",
+    "camera-controls",
+    "three.js",
+    "ifc",
+    "bim",
+    "3d-viewer",
+    "smooth-zoom",
+    "orbit-controls"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "@thatopen/components": "^2.0.0",
+    "@thatopen/components-front": "^2.0.0",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/three": "^0.160.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/thatopen-enhanced-camera-controls"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/thatopen-enhanced-camera-controls/issues"
+  },
+  "homepage": "https://github.com/yourusername/thatopen-enhanced-camera-controls#readme"
+}
