@@ -1,16 +1,9 @@
 import * as OBC from '@thatopen/components'
 import * as THREE from 'three'
 
-// Base dolly step size - auto-calibrated by calibrateDollyStepByScene()
 export const DOLLY_STEP_REF = { value: 0.5 }
 
 export interface SmoothWheelControlConfig {
-  velocityDecay?: number
-  velocityTimeout?: number
-  velocityDivisor?: number
-  maxVelocityMultiplier?: number
-  smoothing?: number
-  stepAccumulation?: number
   shiftBoost?: number
   fineModifier?: number
   fragmentUpdateDelay?: number
@@ -23,21 +16,15 @@ export interface SmoothWheelControlConfig {
 }
 
 const defaultConfig: Required<SmoothWheelControlConfig> = {
-  velocityDecay: 0.9, // Dampens wheelVelocity growth per scroll (0.9 = -10%)
-  velocityTimeout: 150, // After this pause (ms), wheelVelocity resets to zero
-  velocityDivisor: 200, // Converts wheelVelocity → velocityMultiplier (lower = faster acceleration)
-  maxVelocityMultiplier: 5, // Limits maximum acceleration (5x base speed)
-  smoothing: 0.15, // Fraction of targetStep to move per frame (0.15 = 15% per frame)
-  stepAccumulation: 0.3, // How much previous targetStep carries over on new scroll (0.3 = 30%)
   shiftBoost: 3, // Shift key multiplies step size (3x faster)
   fineModifier: 0.1, // Ctrl/Alt/Meta multiplies step size (0.1 = 10x slower)
   fragmentUpdateDelay: 300, // Delay (ms) before updating fragments after movement stops
   proximitySlowdown: true, // Automatic speed adjustment based on object distance
   proximitySlowDistance: 2.0, // Distance where speed is at minimum
   proximityNormalDistance: 10.0, // Distance where speed is normal (1x)
-  proximityFastDistance: 20.0, // Distance where speed reaches maximum
+  proximityFastDistance: 50.0, // Distance where speed reaches maximum
   proximityMinSpeed: 0.1, // Minimum speed when close (0.1 = 10%)
-  proximityMaxSpeed: 4.0, // Maximum speed when far (4.0 = 400%)
+  proximityMaxSpeed: 5.0, // Maximum speed when far (5.0 = 500%)
 }
 
 export function createSmoothWheelControl(
@@ -47,140 +34,83 @@ export function createSmoothWheelControl(
   config: SmoothWheelControlConfig = {}
 ) {
   const cfg = { ...defaultConfig, ...config }
-  
-  let lastWheelTime = 0
-  let wheelVelocity = 0
+
   let wheelTimeoutId: number | null = null
-  let targetStep = 0
-  let animationFrameId: number | null = null
-  let lastMouseX = 0
-  let lastMouseY = 0
 
-  // Animation loop: smoothly moves camera along raycast direction
-  const animate = async () => {
+  // Cache vectors and objects to avoid creating new ones
+  const _pos = new THREE.Vector3()
+  const _tgt = new THREE.Vector3()
+  const _dir = new THREE.Vector3()
+  const _mouse = new THREE.Vector2()
+  const _raycaster = new THREE.Raycaster()
+
+  const wheelHandler = async (e: WheelEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
     const cc = world.camera.controls
-    if (!cc || !containerRef.current || Math.abs(targetStep) < 0.001) {
-      targetStep = 0
-      animationFrameId = null
-      return
-    }
+    if (!cc || !containerRef.current) return
 
-    // Calculate smooth step (fraction of remaining distance)
-    let currentStep = targetStep * cfg.smoothing
-    targetStep -= currentStep
-
-    // Get current camera position and target
-    const pos = cc.getPosition(new THREE.Vector3())
-    const tgt = cc.getTarget(new THREE.Vector3())
-
-    // Calculate direction vector from mouse position via raycast
+    // Calculate mouse position
     const rect = containerRef.current.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((lastMouseX - rect.left) / rect.width) * 2 - 1,
-      -((lastMouseY - rect.top) / rect.height) * 2 + 1
+    _mouse.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
     )
 
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, world.camera.three)
-    const dir = raycaster.ray.direction.clone().normalize()
+    // Calculate ray direction from mouse
+    _raycaster.setFromCamera(_mouse, world.camera.three)
+    _dir.copy(_raycaster.ray.direction).normalize()
 
-    // Proximity-based speed adjustment
-    if (cfg.proximitySlowdown && currentStep !== 0) {
+    // Calculate proximity speed factor
+    let speedFactor = 1.0
+    if (cfg.proximitySlowdown) {
       try {
         const caster = components.get(OBC.Raycasters).get(world)
         const result = await caster.castRay()
-        
+
         if (result && 'distance' in result && typeof result.distance === 'number') {
           const distance = result.distance
-          let speedFactor = 1.0
-          
+
           if (distance < cfg.proximitySlowDistance) {
-            // Close to object: slow down (0.1x - 1.0x)
             speedFactor = THREE.MathUtils.lerp(
               cfg.proximityMinSpeed,
               1.0,
               distance / cfg.proximitySlowDistance
             )
           } else if (distance < cfg.proximityNormalDistance) {
-            // Normal range: maintain normal speed (1.0x)
             speedFactor = 1.0
           } else if (distance < cfg.proximityFastDistance) {
-            // Far from object: speed up (1.0x - 4.0x)
             speedFactor = THREE.MathUtils.lerp(
               1.0,
               cfg.proximityMaxSpeed,
               (distance - cfg.proximityNormalDistance) / (cfg.proximityFastDistance - cfg.proximityNormalDistance)
             )
           } else {
-            // Very far: maximum speed (4.0x)
             speedFactor = cfg.proximityMaxSpeed
           }
-          
-          currentStep *= speedFactor
         }
       } catch (error) {
-        // Silently fail if raycast fails
+        // Ignore raycasting errors, use default speed
       }
     }
 
-    // Move both camera position and target along the ray direction
-    pos.addScaledVector(dir, currentStep)
-    tgt.addScaledVector(dir, currentStep)
-
-    cc.setLookAt(pos.x, pos.y, pos.z, tgt.x, tgt.y, tgt.z, false)
-
-    animationFrameId = requestAnimationFrame(animate)
-  }
-
-  // Wheel event handler: calculates velocity and starts animation
-  const wheelHandler = (e: WheelEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const cc = world.camera.controls
-    if (!cc) return
-
-    // Store mouse position for raycast direction
-    lastMouseX = e.clientX
-    lastMouseY = e.clientY
-
-    const now = Date.now()
-    const timeSinceLastWheel = now - lastWheelTime
-
-    // Reset or decay velocity based on time since last scroll
-    if (timeSinceLastWheel > cfg.velocityTimeout) {
-      wheelVelocity = 0 // Long pause - reset velocity
-    } else {
-      wheelVelocity = wheelVelocity * cfg.velocityDecay // Decay previous velocity
-    }
-
-    // Accumulate scroll velocity
-    const scrollDelta = Math.abs(e.deltaY)
-    wheelVelocity += scrollDelta
-
-    // Convert velocity to speed multiplier (capped at max)
-    const velocityMultiplier = Math.min(
-      1 + wheelVelocity / cfg.velocityDivisor,
-      cfg.maxVelocityMultiplier
-    )
-
-    // Calculate final step with modifiers
+    // Calculate step size
     const base = DOLLY_STEP_REF.value
-    const boost = e.shiftKey ? cfg.shiftBoost : 1 // Shift = faster
-    const fine = e.altKey || e.ctrlKey || e.metaKey ? cfg.fineModifier : 1 // Ctrl/Alt = slower
-    const sign = e.deltaY < 0 ? 1 : -1 // Scroll direction
-    const step = sign * base * boost * fine * velocityMultiplier
+    const boost = e.shiftKey ? cfg.shiftBoost : 1
+    const fine = e.altKey || e.ctrlKey || e.metaKey ? cfg.fineModifier : 1
+    const sign = e.deltaY < 0 ? 1 : -1
+    const step = sign * base * boost * fine * speedFactor
 
-    // Accumulate step (blends with previous motion)
-    targetStep = targetStep * cfg.stepAccumulation + step
+    // Move camera
+    cc.getPosition(_pos)
+    cc.getTarget(_tgt)
 
-    lastWheelTime = now
+    _pos.addScaledVector(_dir, step)
+    _tgt.addScaledVector(_dir, step)
 
-    // Start animation loop if not already running
-    if (animationFrameId === null) {
-      animationFrameId = requestAnimationFrame(animate)
-    }
+    cc.setLookAt(_pos.x, _pos.y, _pos.z, _tgt.x, _tgt.y, _tgt.z, true)
 
-    // Schedule fragment update after movement stops
+    // Update fragments after delay
     if (wheelTimeoutId !== null) {
       clearTimeout(wheelTimeoutId)
     }
@@ -193,27 +123,10 @@ export function createSmoothWheelControl(
   }
 
   const cleanup = () => {
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId)
-    }
     if (wheelTimeoutId !== null) {
       clearTimeout(wheelTimeoutId)
     }
   }
 
   return { wheelHandler, cleanup }
-}
-
-/**
- * Auto-calibrates dolly step based on scene bounding box
- * Fixes the dolly slowdown issue by adjusting zoom speed to scene size
- * Call this after loading models
- */
-export function calibrateDollyStepByScene(world: OBC.World) {
-  const bbox = new THREE.Box3().setFromObject(world.scene.three)
-  const diag = bbox.getSize(new THREE.Vector3()).length()
-  if (isFinite(diag) && diag > 0) {
-    // Set step to 2% of scene diagonal (minimum 0.5)
-    DOLLY_STEP_REF.value = Math.max(diag * 0.02, 0.5)
-  }
 }

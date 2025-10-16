@@ -64,36 +64,15 @@ export function createMouseOrbitControl(
   }
 
   // Touch support: immediately set orbit point on touch
-  const touchStartHandler = (e: TouchEvent) => {
+  const touchStartHandler = async (e: TouchEvent) => {
     if (e.touches.length !== 1) return // Only single touch
-    const touch = e.touches[0]
-
-    if (!containerRef.current) return
-
-    const rect = containerRef.current.getBoundingClientRect()
-    const mouseX = touch.clientX
-    const mouseY = touch.clientY
 
     try {
-      // Convert touch coordinates to normalized device coordinates (-1 to +1)
-      const mouse = new THREE.Vector2(
-        ((mouseX - rect.left) / rect.width) * 2 - 1,
-        -((mouseY - rect.top) / rect.height) * 2 + 1
-      )
+      const caster = components.get(OBC.Raycasters).get(world)
+      const result = await caster.castRay()
 
-      const camera = world.camera.three
-      camera.updateMatrixWorld(true)
-
-      // Perform raycast to find 3D point under touch
-      const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(mouse, camera)
-
-      const intersections = raycaster.intersectObjects(
-        world.scene.three.children,
-        true
-      )
-      if (intersections.length) {
-        const point = intersections[0].point
+      if (result && 'point' in result && result.point) {
+        const point = result.point as THREE.Vector3
         world.camera.controls?.setOrbitPoint(point.x, point.y, point.z)
       }
     } catch (error) {
@@ -109,45 +88,23 @@ export function createMouseOrbitControl(
 }
 
 /**
- * Manually sets the orbit point based on raycast from screen coordinates
+ * Manually sets the orbit point based on raycast at current mouse position
  * Useful for programmatic orbit point control (e.g., double-click to focus)
+ * Note: OBC raycaster uses current mouse position automatically
  *
  * @param world - That Open Components world instance
- * @param containerRef - Reference to the viewer container element
- * @param mouseX - Screen X coordinate (pixels)
- * @param mouseY - Screen Y coordinate (pixels)
+ * @param components - That Open Components instance
  */
-export function setOrbitPoint(
+export async function setOrbitPoint(
   world: OBC.World,
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  mouseX: number,
-  mouseY: number
+  components: OBC.Components
 ) {
-  if (!containerRef.current) return
-
   try {
-    const rect = containerRef.current.getBoundingClientRect()
+    const caster = components.get(OBC.Raycasters).get(world)
+    const result = await caster.castRay()
 
-    // Convert screen coordinates to normalized device coordinates (-1 to +1)
-    const mouse = new THREE.Vector2(
-      ((mouseX - rect.left) / rect.width) * 2 - 1,
-      -((mouseY - rect.top) / rect.height) * 2 + 1
-    )
-
-    const camera = world.camera.three
-    camera.updateMatrixWorld(true)
-
-    // Raycast to find 3D point under cursor
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, camera)
-
-    const intersections = raycaster.intersectObjects(
-      world.scene.three.children,
-      true
-    )
-
-    if (intersections.length) {
-      const point = intersections[0].point
+    if (result && 'point' in result && result.point) {
+      const point = result.point as THREE.Vector3
       world.camera.controls?.setOrbitPoint(point.x, point.y, point.z)
     }
   } catch (error) {

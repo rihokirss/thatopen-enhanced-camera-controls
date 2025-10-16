@@ -5,7 +5,7 @@
 
 import * as OBC from '@thatopen/components'
 import * as OBCF from '@thatopen/components-front'
-import { createSmoothWheelControl, calibrateDollyStepByScene } from './smoothWheelControl.js'
+import { createSmoothWheelControl } from './smoothWheelControl.js'
 import { createMouseOrbitControl, setOrbitPoint } from './mouseOrbitControl.js'
 
 async function initViewer() {
@@ -104,11 +104,9 @@ async function initViewer() {
     model.useCamera(world.camera.three)
     world.scene.three.add(model.object)
 
-    // Auto-calibrate zoom based on model size
-    calibrateDollyStepByScene(world)
     fragments.core.update(true)
 
-    console.log('Model loaded, zoom calibrated')
+    console.log('Model loaded')
   })
 
   world.camera.controls.addEventListener('rest', () => {

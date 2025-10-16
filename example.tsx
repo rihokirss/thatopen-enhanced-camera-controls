@@ -6,7 +6,7 @@
 import { useEffect, useRef } from 'react'
 import * as OBC from '@thatopen/components'
 import * as OBCF from '@thatopen/components-front'
-import { createSmoothWheelControl, calibrateDollyStepByScene } from './smoothWheelControl'
+import { createSmoothWheelControl } from './smoothWheelControl'
 import { createMouseOrbitControl } from './mouseOrbitControl'
 
 export function Viewer() {
@@ -107,9 +107,6 @@ export function Viewer() {
       fragments.list.onItemSet.add(({ value: model }) => {
         model.useCamera(world.camera.three)
         world.scene.three.add(model.object)
-
-        // Calibrate zoom step based on model size
-        calibrateDollyStepByScene(world)
 
         // Update fragments after camera stops
         fragments.core.update(true)
