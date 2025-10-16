@@ -7,10 +7,11 @@ Optimized camera controls for [That Open Components](https://docs.thatopen.com/)
 - **Instant Response** - Direct camera movement, no animation delays
 - **Proximity-Based Speed** - Automatically slows near objects, speeds up far away
 - **Smart Orbit Point** - Automatically sets orbit center based on what you click
+- **Auto Orbit Update** - Fixes truck movement slowdown when zoomed out
 - **Touch Support** - Full mobile device support
 - **Keyboard Modifiers** - Shift for 3x speed, Ctrl/Alt for 10x precision
 - **Highly Configurable** - Customize all speed zones and behaviors
-- **Performance Optimized** - Cached objects, zero allocations per frame
+- **Performance Optimized** - Throttled raycasting, cached values, non-blocking operations
 
 ## Installation
 
@@ -40,7 +41,7 @@ const containerRef = /* React.RefObject or HTMLDivElement */
 
 // Create controls
 const smoothWheel = createSmoothWheelControl(world, components, containerRef)
-const mouseOrbit = createMouseOrbitControl(world, components, containerRef)
+const mouseOrbit = createMouseOrbitControl(world, components)
 
 // Add event listeners
 containerRef.current.addEventListener('wheel', smoothWheel.wheelHandler, { passive: false })
@@ -63,10 +64,10 @@ createSmoothWheelControl(world, components, containerRef, {
   fragmentUpdateDelay: 300,         // Fragment update delay (ms)
   proximitySlowdown: true,          // Enable distance-based speed adjustment
   proximitySlowDistance: 2.0,       // Distance (units) where speed is minimum
-  proximityNormalDistance: 10.0,    // Distance where speed is normal (1x)
+  proximityNormalDistance: 8.0,     // Distance where speed is normal (1x) [optimized]
   proximityFastDistance: 50.0,      // Distance where speed reaches maximum
-  proximityMinSpeed: 0.1,           // Min speed multiplier when close (10%)
-  proximityMaxSpeed: 5.0            // Max speed multiplier when far (500%)
+  proximityMinSpeed: 0.2,           // Min speed multiplier when close (20%) [optimized]
+  proximityMaxSpeed: 10.0           // Max speed multiplier when far (1000%) [optimized]
 })
 ```
 
@@ -95,23 +96,23 @@ The proximity system creates intuitive speed zones:
 
 ```
 Speed Multiplier
-  5.0x |                    _________________ (50m+)
+ 10.0x |                    _________________ (50m+)
        |                   /
-  3.0x |                  /
+  6.0x |                  /
        |                 /
-  1.0x |_________(10m)__/
-       |        /
-  0.5x |       /
-       |      /
-  0.1x |_____/ (0-2m)
+  1.0x |________(8m)____/
+       |       /
+  0.6x |      /
+       |     /
+  0.2x |____/ (0-2m)
        |_____|_____|_____|_____|_____|
          0    10    20    30    40   50m (distance)
 ```
 
-- **0-2m**: Slows to 10%-100% for precision near objects
-- **2-10m**: Normal speed 100%
-- **10-50m**: Speeds up 100%-500% for large scenes
-- **50m+**: Maximum speed 500%
+- **0-2m**: Slows to 20%-100% for precision near objects (optimized)
+- **2-8m**: Normal speed 100% (optimized from 10m)
+- **8-50m**: Speeds up 100%-1000% for large scenes (optimized)
+- **50m+**: Maximum speed 1000% (optimized from 500%)
 
 Uses `THREE.MathUtils.lerp` for smooth transitions between zones.
 
@@ -119,17 +120,42 @@ Uses `THREE.MathUtils.lerp` for smooth transitions between zones.
 
 ### smoothWheelControl.ts
 - Instant camera movement on wheel scroll
-- Proximity-based speed adjustment using OBC raycasting
+- **Throttled raycasting** (100ms interval) - only when stationary
+- **Cached speed factor** - uses last known value during movement
+- **Auto orbit point update** - fixes truck slowdown when zoomed out
 - Cached THREE.js objects (Vector3, Vector2, Raycaster) for zero allocations
 - Configurable speed modifiers (Shift, Ctrl/Alt)
-- Fragment update optimization
+- Fragment update optimization with delayed final raycast (50ms)
 
 ### mouseOrbitControl.ts
 - OBC raycast-based orbit point selection (mouse, touch, programmatic)
+- **Non-blocking raycasting** - uses promise chain instead of async/await
 - Drag threshold to prevent accidental triggers on clicks
 - Full touch device support
 - Async raycasting for all operations
 - Manual orbit point utility function
+
+## Performance Optimizations
+
+### Raycasting Throttling
+- Raycasts only execute **every 100ms** and only when stationary
+- During fast scrolling, uses **cached speed factor** from last raycast
+- Final raycast performed **50ms after movement stops** for accuracy
+
+### Non-Blocking Operations
+- `mouseDownHandler` uses promise chain (`.then()/.catch()`) instead of `async/await`
+- Prevents blocking the main thread during mouse interactions
+- UI remains responsive even with heavy raycasting
+
+### Auto Orbit Point Update
+- Automatically updates orbit point when raycasting objects
+- Fixes **truck (pan) movement slowdown** when camera is far from orbit point
+- camera-controls library scales truck speed based on orbit distance
+
+### Memory Optimization
+- All THREE.js objects (Vector3, Vector2, Raycaster) cached and reused
+- Zero allocations per frame during movement
+- Cleanup function properly clears all timeouts
 
 ## Use Cases
 

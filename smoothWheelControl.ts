@@ -21,10 +21,10 @@ const defaultConfig: Required<SmoothWheelControlConfig> = {
   fragmentUpdateDelay: 300, // Delay (ms) before updating fragments after movement stops
   proximitySlowdown: true, // Automatic speed adjustment based on object distance
   proximitySlowDistance: 2.0, // Distance where speed is at minimum
-  proximityNormalDistance: 10.0, // Distance where speed is normal (1x)
+  proximityNormalDistance: 8.0, // Distance where speed is normal (1x) - optimized from 10.0
   proximityFastDistance: 50.0, // Distance where speed reaches maximum
-  proximityMinSpeed: 0.1, // Minimum speed when close (0.1 = 10%)
-  proximityMaxSpeed: 5.0, // Maximum speed when far (5.0 = 500%)
+  proximityMinSpeed: 0.2, // Minimum speed when close (0.2 = 20%) - optimized from 0.1
+  proximityMaxSpeed: 10.0, // Maximum speed when far (10.0 = 1000%) - optimized from 5.0
 }
 
 export function createSmoothWheelControl(
@@ -36,70 +36,103 @@ export function createSmoothWheelControl(
   const cfg = { ...defaultConfig, ...config }
 
   let wheelTimeoutId: number | null = null
+  let raycastTimeoutId: number | null = null
+  let lastRaycastTime = 0
+  let cachedSpeedFactor = 1.0
+  let isMoving = false
+  let cachedRect: DOMRect | null = null
+  let lastRectUpdate = 0
 
-  // Cache vectors and objects to avoid creating new ones
+  const RAYCAST_THROTTLE = 100 // ms between raycasts
+  const RECT_CACHE_DURATION = 100 // ms between rect updates
+
   const _pos = new THREE.Vector3()
   const _tgt = new THREE.Vector3()
   const _dir = new THREE.Vector3()
   const _mouse = new THREE.Vector2()
   const _raycaster = new THREE.Raycaster()
 
-  const wheelHandler = async (e: WheelEvent) => {
+  /**
+   * Performs raycast and updates cached speed factor
+   * Also automatically updates orbit point to prevent truck slowdown issues
+   */
+  const performRaycast = async () => {
+    try {
+      const caster = components.get(OBC.Raycasters).get(world)
+      const result = await caster.castRay()
+
+      // Update orbit point to prevent truck movement from slowing down when zoomed out
+      if (result && 'point' in result && result.point) {
+        const point = result.point as THREE.Vector3
+        world.camera.controls?.setOrbitPoint(point.x, point.y, point.z)
+      }
+
+      if (!cfg.proximitySlowdown) return
+
+      if (result && 'distance' in result && typeof result.distance === 'number') {
+        const distance = result.distance
+
+        if (distance < cfg.proximitySlowDistance) {
+          cachedSpeedFactor = THREE.MathUtils.lerp(
+            cfg.proximityMinSpeed,
+            1.0,
+            distance / cfg.proximitySlowDistance
+          )
+        } else if (distance < cfg.proximityNormalDistance) {
+          cachedSpeedFactor = 1.0
+        } else if (distance < cfg.proximityFastDistance) {
+          cachedSpeedFactor = THREE.MathUtils.lerp(
+            1.0,
+            cfg.proximityMaxSpeed,
+            (distance - cfg.proximityNormalDistance) / (cfg.proximityFastDistance - cfg.proximityNormalDistance)
+          )
+        } else {
+          cachedSpeedFactor = cfg.proximityMaxSpeed
+        }
+      } else {
+        // No hit - assume max speed (empty space)
+        cachedSpeedFactor = cfg.proximityMaxSpeed
+      }
+    } catch (error) {
+      // On error, assume max speed
+      cachedSpeedFactor = cfg.proximityMaxSpeed
+    }
+  }
+
+  const wheelHandler = (e: WheelEvent) => {
     e.preventDefault()
     e.stopPropagation()
     const cc = world.camera.controls
     if (!cc || !containerRef.current) return
 
-    // Calculate mouse position
-    const rect = containerRef.current.getBoundingClientRect()
+    const now = performance.now()
+    
+    if (!cachedRect || now - lastRectUpdate > RECT_CACHE_DURATION) {
+      cachedRect = containerRef.current.getBoundingClientRect()
+      lastRectUpdate = now
+    }
+
     _mouse.set(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
+      ((e.clientX - cachedRect.left) / cachedRect.width) * 2 - 1,
+      -((e.clientY - cachedRect.top) / cachedRect.height) * 2 + 1
     )
 
-    // Calculate ray direction from mouse
     _raycaster.setFromCamera(_mouse, world.camera.three)
     _dir.copy(_raycaster.ray.direction).normalize()
 
-    // Calculate proximity speed factor
-    let speedFactor = 1.0
-    if (cfg.proximitySlowdown) {
-      try {
-        const caster = components.get(OBC.Raycasters).get(world)
-        const result = await caster.castRay()
-
-        if (result && 'distance' in result && typeof result.distance === 'number') {
-          const distance = result.distance
-
-          if (distance < cfg.proximitySlowDistance) {
-            speedFactor = THREE.MathUtils.lerp(
-              cfg.proximityMinSpeed,
-              1.0,
-              distance / cfg.proximitySlowDistance
-            )
-          } else if (distance < cfg.proximityNormalDistance) {
-            speedFactor = 1.0
-          } else if (distance < cfg.proximityFastDistance) {
-            speedFactor = THREE.MathUtils.lerp(
-              1.0,
-              cfg.proximityMaxSpeed,
-              (distance - cfg.proximityNormalDistance) / (cfg.proximityFastDistance - cfg.proximityNormalDistance)
-            )
-          } else {
-            speedFactor = cfg.proximityMaxSpeed
-          }
-        }
-      } catch (error) {
-        // Ignore raycasting errors, use default speed
-      }
+    if (!isMoving && now - lastRaycastTime > RAYCAST_THROTTLE) {
+      lastRaycastTime = now
+      performRaycast()
     }
 
-    // Calculate step size
+    isMoving = true
+
+    // Calculate step size using cached speed factor (no blocking raycast)
     const base = DOLLY_STEP_REF.value
     const boost = e.shiftKey ? cfg.shiftBoost : 1
     const fine = e.altKey || e.ctrlKey || e.metaKey ? cfg.fineModifier : 1
     const sign = e.deltaY < 0 ? 1 : -1
-    const step = sign * base * boost * fine * speedFactor
+    const step = sign * base * boost * fine * cachedSpeedFactor
 
     // Move camera
     cc.getPosition(_pos)
@@ -119,12 +152,25 @@ export function createSmoothWheelControl(
       const fragments = components.get(OBC.FragmentsManager)
       fragments.core.update(true)
       wheelTimeoutId = null
+      isMoving = false
+      
+      // Perform final raycast after movement stops (with small delay)
+      if (raycastTimeoutId !== null) {
+        clearTimeout(raycastTimeoutId)
+      }
+      raycastTimeoutId = window.setTimeout(() => {
+        performRaycast()
+        raycastTimeoutId = null
+      }, 50)
     }, cfg.fragmentUpdateDelay)
   }
 
   const cleanup = () => {
     if (wheelTimeoutId !== null) {
       clearTimeout(wheelTimeoutId)
+    }
+    if (raycastTimeoutId !== null) {
+      clearTimeout(raycastTimeoutId)
     }
   }
 

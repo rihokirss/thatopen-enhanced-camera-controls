@@ -13,11 +13,14 @@ interface MouseOrbitControlState {
 /**
  * Creates smart orbit controls that automatically set the rotation center
  * based on what the user clicks on (raycast-based)
+ * 
+ * Performance optimizations:
+ * - mouseDownHandler is non-blocking (uses promise chain instead of async/await)
+ * - containerRef parameter removed (not needed)
  */
 export function createMouseOrbitControl(
   world: OBC.World,
-  components: OBC.Components,
-  containerRef: React.RefObject<HTMLDivElement | null>
+  components: OBC.Components
 ) {
   const state: MouseOrbitControlState = {
     mouseDownPos: { x: 0, y: 0 },
@@ -25,24 +28,22 @@ export function createMouseOrbitControl(
     raycastResult: null,
   }
 
-  // On mouse down: perform raycast to find 3D point under cursor
-  const mouseDownHandler = async (e: MouseEvent) => {
+  // On mouse down: perform raycast to find 3D point under cursor (non-blocking)
+  const mouseDownHandler = (e: MouseEvent) => {
     if (e.button !== 0) return // Only left click
     state.mouseDownPos = { x: e.clientX, y: e.clientY }
     state.hasSetOrbitPoint = false
     state.raycastResult = null
 
-    try {
-      const caster = components.get(OBC.Raycasters).get(world)
-      const result = await caster.castRay()
-
+    const caster = components.get(OBC.Raycasters).get(world)
+    caster.castRay().then((result) => {
       if (result && 'point' in result && result.point) {
         // Store the 3D point for later use
         state.raycastResult = { point: result.point as THREE.Vector3 }
       }
-    } catch (error) {
+    }).catch((error) => {
       console.error('Error raycasting:', error)
-    }
+    })
   }
 
   // On mouse move: check if user is dragging, then set orbit point
