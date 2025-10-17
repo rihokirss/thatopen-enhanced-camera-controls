@@ -30,7 +30,7 @@ const defaultConfig: Required<SmoothWheelControlConfig> = {
 export function createSmoothWheelControl(
   world: OBC.World,
   components: OBC.Components,
-  containerRef: React.RefObject<HTMLDivElement | null>,
+  container: HTMLDivElement | { current: HTMLDivElement | null },
   config: SmoothWheelControlConfig = {}
 ) {
   const cfg = { ...defaultConfig, ...config }
@@ -61,8 +61,8 @@ export function createSmoothWheelControl(
       const caster = components.get(OBC.Raycasters).get(world)
       const result = await caster.castRay()
 
-      // Update orbit point to prevent truck movement from slowing down when zoomed out
-      if (result && 'point' in result && result.point) {
+      // Set orbit point only before zooming starts, not during movement (prevents "bounce back" when passing through walls)
+      if (result && 'point' in result && result.point && !isMoving) {
         const point = result.point as THREE.Vector3
         world.camera.controls?.setOrbitPoint(point.x, point.y, point.z)
       }
@@ -93,8 +93,7 @@ export function createSmoothWheelControl(
         // No hit - assume max speed (empty space)
         cachedSpeedFactor = cfg.proximityMaxSpeed
       }
-    } catch (error) {
-      // On error, assume max speed
+    } catch {
       cachedSpeedFactor = cfg.proximityMaxSpeed
     }
   }
@@ -103,12 +102,14 @@ export function createSmoothWheelControl(
     e.preventDefault()
     e.stopPropagation()
     const cc = world.camera.controls
-    if (!cc || !containerRef.current) return
+    
+    const element = 'current' in container ? container.current : container
+    if (!cc || !element) return
 
     const now = performance.now()
     
     if (!cachedRect || now - lastRectUpdate > RECT_CACHE_DURATION) {
-      cachedRect = containerRef.current.getBoundingClientRect()
+      cachedRect = element.getBoundingClientRect()
       lastRectUpdate = now
     }
 
