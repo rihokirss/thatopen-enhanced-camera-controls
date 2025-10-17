@@ -7,6 +7,7 @@ export interface SmoothWheelControlConfig {
   shiftBoost?: number
   fineModifier?: number
   fragmentUpdateDelay?: number
+  enableSmoothing?: boolean
   proximitySlowdown?: boolean
   proximitySlowDistance?: number
   proximityNormalDistance?: number
@@ -19,12 +20,13 @@ const defaultConfig: Required<SmoothWheelControlConfig> = {
   shiftBoost: 3, // Shift key multiplies step size (3x faster)
   fineModifier: 0.1, // Ctrl/Alt/Meta multiplies step size (0.1 = 10x slower)
   fragmentUpdateDelay: 300, // Delay (ms) before updating fragments after movement stops
+  enableSmoothing: true, // Smooth camera movement (camera-controls interpolation)
   proximitySlowdown: true, // Automatic speed adjustment based on object distance
-  proximitySlowDistance: 2.0, // Distance where speed is at minimum
-  proximityNormalDistance: 8.0, // Distance where speed is normal (1x) - optimized from 10.0
-  proximityFastDistance: 50.0, // Distance where speed reaches maximum
-  proximityMinSpeed: 0.2, // Minimum speed when close (0.2 = 20%) - optimized from 0.1
-  proximityMaxSpeed: 10.0, // Maximum speed when far (10.0 = 1000%) - optimized from 5.0
+  proximitySlowDistance: 1.0, // Distance where speed is at minimum
+  proximityNormalDistance: 10.0, // Distance where speed is normal (1x)
+  proximityFastDistance: 80.0, // Distance where speed reaches maximum
+  proximityMinSpeed: 0.2, // Minimum speed when close (0.2 = 20%)
+  proximityMaxSpeed: 10.0, // Maximum speed when far (10.0 = 1000%)
 }
 
 export function createSmoothWheelControl(
@@ -142,7 +144,7 @@ export function createSmoothWheelControl(
     _pos.addScaledVector(_dir, step)
     _tgt.addScaledVector(_dir, step)
 
-    cc.setLookAt(_pos.x, _pos.y, _pos.z, _tgt.x, _tgt.y, _tgt.z, true)
+    cc.setLookAt(_pos.x, _pos.y, _pos.z, _tgt.x, _tgt.y, _tgt.z, cfg.enableSmoothing)
 
     // Update fragments after delay
     if (wheelTimeoutId !== null) {

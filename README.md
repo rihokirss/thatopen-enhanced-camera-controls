@@ -62,12 +62,13 @@ createSmoothWheelControl(world, components, containerRef, {
   shiftBoost: 3,                    // Shift key multiplier (3x faster)
   fineModifier: 0.1,                // Ctrl/Alt precision multiplier (10x slower)
   fragmentUpdateDelay: 300,         // Fragment update delay (ms)
+  enableSmoothing: true,            // Smooth camera movement interpolation
   proximitySlowdown: true,          // Enable distance-based speed adjustment
-  proximitySlowDistance: 2.0,       // Distance (units) where speed is minimum
-  proximityNormalDistance: 8.0,     // Distance where speed is normal (1x) [optimized]
-  proximityFastDistance: 50.0,      // Distance where speed reaches maximum
-  proximityMinSpeed: 0.2,           // Min speed multiplier when close (20%) [optimized]
-  proximityMaxSpeed: 10.0           // Max speed multiplier when far (1000%) [optimized]
+  proximitySlowDistance: 1.0,       // Distance (units) where speed is minimum
+  proximityNormalDistance: 10.0,    // Distance where speed is normal (1x)
+  proximityFastDistance: 80.0,      // Distance where speed reaches maximum
+  proximityMinSpeed: 0.2,           // Min speed multiplier when close (20%)
+  proximityMaxSpeed: 10.0           // Max speed multiplier when far (1000%)
 })
 ```
 
@@ -96,23 +97,23 @@ The proximity system creates intuitive speed zones:
 
 ```
 Speed Multiplier
- 10.0x |                    _________________ (50m+)
-       |                   /
-  6.0x |                  /
-       |                 /
-  1.0x |________(8m)____/
+ 10.0x |                          _________________ (80m+)
+       |                         /
+  6.0x |                        /
+       |                       /
+  1.0x |_________(10m)________/
        |       /
   0.6x |      /
        |     /
-  0.2x |____/ (0-2m)
-       |_____|_____|_____|_____|_____|
-         0    10    20    30    40   50m (distance)
+  0.2x |____/ (0-1m)
+       |_____|_____|_____|_____|_____|_____|_____|
+         0    20    40    60    80   100  120  140m (distance)
 ```
 
-- **0-2m**: Slows to 20%-100% for precision near objects (optimized)
-- **2-8m**: Normal speed 100% (optimized from 10m)
-- **8-50m**: Speeds up 100%-1000% for large scenes (optimized)
-- **50m+**: Maximum speed 1000% (optimized from 500%)
+- **0-1m**: Slows to 20%-100% for precision near objects
+- **1-10m**: Normal speed 100%
+- **10-80m**: Speeds up 100%-1000% for large scenes
+- **80m+**: Maximum speed 1000%
 
 Uses `THREE.MathUtils.lerp` for smooth transitions between zones.
 
