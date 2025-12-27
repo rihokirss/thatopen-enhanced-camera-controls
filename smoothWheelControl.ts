@@ -101,6 +101,12 @@ export function createSmoothWheelControl(
   }
 
   const wheelHandler = (e: WheelEvent) => {
+    // Skip custom wheel handling in Plan mode - let CameraControls handle it
+    const camera = world.camera as OBC.OrthoPerspectiveCamera
+    if (camera.mode?.id === 'Plan') {
+      return
+    }
+    
     e.preventDefault()
     e.stopPropagation()
     const cc = world.camera.controls

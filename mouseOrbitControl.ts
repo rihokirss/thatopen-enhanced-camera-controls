@@ -31,6 +31,11 @@ export function createMouseOrbitControl(
   // On mouse down: perform raycast to find 3D point under cursor (non-blocking)
   const mouseDownHandler = (e: MouseEvent) => {
     if (e.button !== 0) return // Only left click
+    
+    // Skip orbit point logic in Plan mode (2D floor plan view)
+    const camera = world.camera as OBC.OrthoPerspectiveCamera
+    if (camera.mode?.id === 'Plan') return
+    
     state.mouseDownPos = { x: e.clientX, y: e.clientY }
     state.hasSetOrbitPoint = false
     state.raycastResult = null
@@ -48,6 +53,10 @@ export function createMouseOrbitControl(
 
   // On mouse move: check if user is dragging, then set orbit point
   const mouseMoveHandler = (e: MouseEvent) => {
+    // Skip orbit point logic in Plan mode (2D floor plan view)
+    const camera = world.camera as OBC.OrthoPerspectiveCamera
+    if (camera.mode?.id === 'Plan') return
+    
     if (e.buttons !== 1 || state.hasSetOrbitPoint) return // Only while left button pressed
 
     // Calculate drag distance
